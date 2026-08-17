@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>WB ПВЗ — Автопечать этикеток</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="bg-ambient">
+  <span class="blob blob-a"></span>
+  <span class="blob blob-b"></span>
+  <span class="blob blob-c"></span>
+</div>
+
+<div id="healthCheckOverlay" class="health-overlay" style="display:none">
+  <div class="health-modal">
+    <h2>Обнаружены критичные проблемы</h2>
+    <p class="hint">Без решения этих проблем автопечать работать не будет. Исправьте их и нажмите «Повторить проверку».</p>
+    <div id="healthCheckList" class="health-list"></div>
+    <button class="btn btn-primary" id="healthRecheckBtn">Повторить проверку</button>
+  </div>
+</div>
+
+<div id="view-home" class="home-view">
+  <div class="home-header">
+    <div class="brand">WB ПВЗ<span>Автопечать этикеток</span></div>
+    <button class="btn-icon" id="advancedLinkBtn" title="Расширенные настройки" type="button">⚙</button>
+  </div>
+
+  <div id="healthWarningBanner" class="health-banner" style="display:none"></div>
+
+  <div class="status-card" id="statusCard">
+    <div class="status-dot" id="statusDot"></div>
+    <div>
+      <div class="status-text" id="statusText">—</div>
+      <div class="status-sub" id="statusSub"></div>
+    </div>
+  </div>
+
+  <div class="row-inline">
+    <button id="pauseBtn" class="btn btn-outline btn-large">Пауза</button>
+    <button id="repeatBtn" class="btn btn-outline btn-large">Повтор печати</button>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Принтер</h3>
+      <p id="printerInfo">—</p>
+    </div>
+    <div class="card">
+      <h3>Последняя ячейка</h3>
+      <p id="lastCellInfo">—</p>
+    </div>
+  </div>
+
+  <hr>
+  <h2>Тестовый скан</h2>
+  <p class="hint">Прогоняет весь цикл (задержка → проверка цвета → захват → OCR → печать) так, будто сработал сканер — удобно для проверки настроек без физического сканирования.</p>
+  <button class="btn btn-primary" id="testScanBtn">Запустить тестовый скан</button>
+  <p id="testScanResult" class="hint"></p>
+
+  <hr>
+      <h2>Область номера и цветовые точки</h2>
+      <p class="hint">Переключитесь на окно «Мой ПВЗ», нажмите кнопку — через несколько секунд будет сделан снимок окна.
+        Сначала выделите мышкой прямоугольник вокруг номера ячейки (можно перевыделить — старая рамка исчезнет).
+        Затем, если нужно, кликните пипеткой по точке экрана, цвет которой должен присутствовать для разрешения печати.</p>
+      <button class="btn btn-secondary" id="calibrateBtn">Откалибровать (снимок через 4 сек)</button>
+      <div class="row-inline" id="calibrateModeRow" style="display:none">
+        <button class="btn btn-outline active" id="modeRegionBtn" type="button">✎ Область номера</button>
+        <button class="btn btn-outline" id="modeColorBtn" type="button">💧 Пипетка цвета</button>
+      </div>
+      <div id="calibrateArea" class="calibrate-area"></div>
+      <button class="btn btn-primary" id="saveRegionBtn" style="display:none">Сохранить область номера</button>
+
+      <div id="colorTriggersPanel" style="display:none">
+        <h3>Цветовые точки-триггеры</h3>
+        <p class="hint">Печать выполнится только если цвет во ВСЕХ (логика «И») или ХОТЯ БЫ ОДНОЙ (логика «ИЛИ») точке совпадёт (с допуском) сразу после скана. Если нет — печать тихо отменяется, без сигнала ошибки.</p>
+        <label class="row-inline">Логика между точками:
+          <select id="colorLogic">
+            <option value="AND">И (все точки должны совпасть)</option>
+            <option value="OR">ИЛИ (достаточно одной)</option>
+          </select>
+        </label>
+        <div id="colorTriggersList" class="color-triggers-list"></div>
+      </div>
+
+      <hr>
+      <h2>Проверить область</h2>
+      <button class="btn btn-secondary" id="testRegionBtn">Захватить и распознать сейчас</button>
+      <div id="testRegionResult" class="test-region-result"></div>
+</div>
+
+<div id="pinModal" class="pin-modal-overlay" style="display:none">
+  <div class="pin-modal">
+    <h2>Расширенные настройки</h2>
+    <p class="hint">Введите PIN-код, чтобы открыть остальные вкладки (принтер, калибровка OCR, редактор этикетки, журнал и т.д.).</p>
+    <input type="password" id="pinInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••">
+    <p class="hint" id="pinError" style="display:none">Неверный PIN-код</p>
+    <div class="row-inline">
+      <button class="btn btn-primary" id="pinSubmitBtn" type="button">Войти</button>
+      <button class="btn btn-outline" id="pinCancelBtn" type="button">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<div class="app" id="view-advanced" style="display:none">
+  <aside class="sidebar">
+    <div class="brand">WB ПВЗ<span>Автопечать этикеток</span></div>
+    <nav>
+      <div class="nav-pill" id="navPill"></div>
+      <button class="nav-btn active" data-tab="dashboard">Статус</button>
+      <button class="nav-btn" data-tab="printer">Принтер</button>
+      <button class="nav-btn" data-tab="capture">Область распознавания</button>
+      <button class="nav-btn" data-tab="scanner">Детектор сканера</button>
+      <button class="nav-btn" data-tab="template">Редактор этикетки</button>
+      <button class="nav-btn" data-tab="log">Журнал печати</button>
+      <button class="nav-btn" data-tab="general">Общие / экспорт</button>
+      <button class="nav-btn" data-tab="help">Инструкция</button>
+    </nav>
+    <div class="pause-block">
+      <button class="btn btn-outline" id="backToHomeBtn">← На главную</button>
+    </div>
+  </aside>
+
+  <main class="content">
+
+    <section id="tab-dashboard" class="tab active">
+      <h1>Печать: дополнительные параметры</h1>
+      <p class="hint">Статус, пауза и повтор печати теперь на главном экране — сюда попадают только настройки, которые не нужны на каждый день.</p>
+      <div class="grid2">
+        <div class="card">
+          <h3>Детектор сканера</h3>
+          <p id="scannerDeviceStatusDash">—</p>
+        </div>
+      </div>
+
+      <hr>
+      <div class="row-inline space-between">
+        <h2 style="margin:0">Способ печати номера</h2>
+      </div>
+      <p class="hint" id="printModeHint">Загрузка…</p>
+      <div class="row-inline" id="printModeRow">
+        <button class="btn btn-outline" id="printModeOcrBtn" type="button">Распознавание (OCR)</button>
+        <button class="btn btn-outline" id="printModeScreenshotBtn" type="button">Со скриншота (без OCR)</button>
+      </div>
+
+      <hr>
+      <div class="row-inline space-between">
+        <h2 style="margin:0">Откалиброванные области</h2>
+        <button class="btn btn-secondary" id="refreshPreviewBtn">Обновить превью</button>
+      </div>
+      <p class="hint">Красная рамка — область номера ячейки, цветные кружки — точки-триггеры. Снимок делается прямо сейчас с окна «Мой ПВЗ».</p>
+      <div id="previewRegionsWrap" class="preview-regions-wrap">
+        <p class="hint">Нажмите «Обновить превью», чтобы увидеть текущие области.</p>
+      </div>
+
+    </section>
+
+    <section id="tab-printer" class="tab">
+      <h1>Принтер</h1>
+      <div class="form-row">
+        <label>Принтер Windows</label>
+        <div class="row-inline">
+          <select id="printerSelect"></select>
+          <button class="btn btn-secondary" id="refreshPrintersBtn">Обновить список</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Размер этикетки</label>
+        <select id="labelSizePreset"></select>
+        <p class="hint">Выберите готовый размер из списка — поля ширины/высоты заполнятся сами. Если нужного размера нет, выберите «Другой размер» и введите значения вручную ниже. Ширина печати XP-370B: 20–82 мм.</p>
+      </div>
+      <div class="form-grid">
+        <label>Ширина этикетки, мм <input type="number" id="labelWidth" step="0.1"></label>
+        <label>Высота этикетки, мм <input type="number" id="labelHeight" step="0.1"></label>
+        <label>Зазор (GAP), мм <input type="number" id="labelGap" step="0.1"></label>
+        <label>DPI <input type="number" id="labelDpi"></label>
+        <label>Скорость печати <input type="number" id="labelSpeed"></label>
+        <label>Плотность (DENSITY) <input type="number" id="labelDensity"></label>
+      </div>
+      <label class="checkbox-row"><input type="checkbox" id="bitmapInvert"> Инвертировать битмап (если текст/картинка печатаются в негативе)</label>
+      <div class="form-grid">
+        <label>Сдвиг печати влево/вправо, мм <input type="number" id="offsetX" step="0.1"></label>
+        <label>Сдвиг печати вверх/вниз, мм <input type="number" id="offsetY" step="0.1"></label>
+      </div>
+      <p class="hint">Положительное значение сдвигает печать вправо/вниз, отрицательное — влево/вверх. На некоторых принтерах (в зависимости от того, как физически заправлен рулон) эти два поля могут поменяться местами по эффекту — если «влево/вправо» на деле двигает вверх-вниз, используйте вместо него поле «вверх/вниз», и наоборот.</p>
+      <div class="form-grid">
+        <label>Всего этикеток в рулоне <input type="number" id="rollTotal"></label>
+        <label>Осталось этикеток <input type="number" id="rollRemaining"></label>
+      </div>
+
+      <h3>Конвертация картинки в чёрно-белое</h3>
+      <p class="hint">Термопринтер физически умеет печатать только «точка есть / точки нет», без полутонов — эти настройки определяют, как цветная/полутоновая картинка (загруженная в редакторе этикетки) превращается в 1-битное изображение.</p>
+      <div class="form-grid">
+        <label>Способ конвертации
+          <select id="imgConvMethod">
+            <option value="dither">Дизеринг (лучше для фото, градиентов)</option>
+            <option value="threshold">Жёсткий порог (лучше для логотипов/чёткой графики)</option>
+          </select>
+        </label>
+        <label>Порог (0-255, только для «Жёсткий порог») <input type="number" id="imgConvThreshold" min="0" max="255"></label>
+        <label>Контраст (1.0 — без изменений) <input type="number" id="imgConvContrast" step="0.1" min="0.1" max="5"></label>
+        <label>Яркость (1.0 — без изменений) <input type="number" id="imgConvBrightness" step="0.1" min="0.1" max="5"></label>
+      </div>
+      <label class="checkbox-row"><input type="checkbox" id="imgConvInvert"> Инвертировать цвет картинки (негатив)</label>
+      <button class="btn btn-primary" id="savePrinterBtn">Сохранить</button>
+
+      <hr>
+      <h2>Тестовая печать</h2>
+      <div class="row-inline">
+        <input type="text" id="testCellNumber" placeholder="Например, 42" maxlength="6">
+        <button class="btn btn-primary" id="testPrintBtn">Напечатать тестовую этикетку</button>
+      </div>
+      <p id="testPrintResult" class="hint"></p>
+    </section>
+
+    <section id="tab-capture" class="tab">
+      <h1>Область распознавания номера ячейки</h1>
+      <div class="form-grid">
+        <label>Заголовок окна «Мой ПВЗ» <input type="text" id="windowTitle"></label>
+        <label class="checkbox-row"><input type="checkbox" id="exactTitle"> Точное совпадение заголовка</label>
+      </div>
+      <div class="form-grid">
+        <label>Мин. цифр в номере <input type="number" id="minDigits"></label>
+        <label>Макс. цифр в номере <input type="number" id="maxDigits"></label>
+        <label class="checkbox-row"><input type="checkbox" id="digitsOnly"> Распознавать только цифры</label>
+      </div>
+
+      <h3>Печать со скриншота (без OCR)</h3>
+      <p class="hint">Действует только в режиме печати «Со скриншота» (переключается на вкладке «Статус»). У номера на сайте обычно тонкий шрифт — после перевода в чёрно-белое для термопечати он может побледнеть/рассыпаться, утолщение это компенсирует.</p>
+      <div class="form-grid">
+        <label class="checkbox-row"><input type="checkbox" id="screenshotBold"> Сделать текст толще перед печатью</label>
+        <label>Сила утолщения (1-5) <input type="number" id="screenshotBoldStrength" min="1" max="5"></label>
+      </div>
+
+      <h3>Точность OCR</h3>
+      <p class="hint">Если номер распознаётся неправильно — сначала попробуйте кнопку «Проверить область» ниже (показывает % уверенности). Тонкую настройку ниже трогайте, только если стандартных результатов недостаточно.</p>
+
+      <details class="advanced-details">
+        <summary>Расширенные настройки распознавания (порог, ансамбль, эталоны)</summary>
+
+        <div class="form-grid">
+          <label>Увеличение перед OCR (x) <input type="number" id="ocrUpscale" min="1" max="8"></label>
+          <label>Порог бинаризации
+            <select id="ocrThresholdMode">
+              <option value="auto">Авто (метод Отсу)</option>
+              <option value="manual">Ручной</option>
+            </select>
+          </label>
+          <label>Значение порога (0-255, если ручной) <input type="number" id="ocrThresholdValue" min="0" max="255"></label>
+          <label>Инверсия цвета (тёмный фон)
+            <select id="ocrInvertMode">
+              <option value="auto">Авто-определение</option>
+              <option value="always">Всегда инвертировать</option>
+              <option value="never">Никогда не инвертировать</option>
+            </select>
+          </label>
+          <label>Мин. уверенность OCR, % <input type="number" id="ocrMinConfidence" min="0" max="100"></label>
+        </div>
+        <label class="checkbox-row"><input type="checkbox" id="ocrAutocrop"> Автообрезка по фактической границе цифр перед распознаванием</label>
+        <label class="checkbox-row"><input type="checkbox" id="ocrStabilityCheck"> Ждать стабилизации кадра перед захватом (защита от чтения "на лету" перерисовывающегося экрана)</label>
+        <div class="form-grid">
+          <label>Макс. ожидание стабилизации, мс <input type="number" id="ocrStabilityMaxWait" min="0" max="1000"></label>
+          <label>Мин. допустимый номер (0 = не ограничено) <input type="number" id="plausibleMin" min="0"></label>
+          <label>Макс. допустимый номер (0 = не ограничено) <input type="number" id="plausibleMax" min="0"></label>
+        </div>
+        <p class="hint">Если номера ячеек в вашем ПВЗ всегда лежат в известном диапазоне (например, 1-120) — укажите его: любой результат OCR вне диапазона будет автоматически отброшен ещё до печати, даже если по формату (кол-во цифр) он выглядел правдоподобно.</p>
+
+        <h3>Ансамбль распознавания</h3>
+        <p class="hint">Несколько независимых способов прочитать номер голосуют между собой — побеждает самый частый результат. Все три можно включать/выключать по отдельности.</p>
+        <label class="checkbox-row"><input type="checkbox" id="ocrSegmentationEnabled"> Посимвольное распознавание (каждая цифра отдельно — доп. голос)</label>
+        <label class="checkbox-row"><input type="checkbox" id="ocrOpencvEnabled"> Адаптивная бинаризация через OpenCV (доп. голос на последней попытке; ~30-60 МБ к установщику)</label>
+        <label class="checkbox-row"><input type="checkbox" id="digitTemplatesEnabled"> Самообучающиеся эталоны цифр (без ручной калибровки — копятся сами из уверенных распознаваний)</label>
+
+        <div id="digitTemplatesPanel" class="digit-templates-panel">
+          <h4>Накопленные эталоны цифр</h4>
+          <p class="hint">Цифра засчитывается "созревшей" (участвует в голосовании), когда для неё накоплено достаточно образцов (порог настраивается ниже). Число под цифрой — сколько образцов сейчас накоплено.</p>
+          <div id="digitTemplatesGrid" class="digit-templates-grid"></div>
+          <div class="form-grid">
+            <label>Порог уверенности для самообучения, % <input type="number" id="dtHarvestMinConfidence" min="0" max="100"></label>
+            <label>Мин. согласившихся голосов для самообучения <input type="number" id="dtHarvestMinAgreement" min="1" max="10"></label>
+            <label>Образцов до "созревания" эталона <input type="number" id="dtMinSamples" min="1" max="20"></label>
+            <label>Макс. хранимых образцов на цифру <input type="number" id="dtMaxSamples" min="1" max="50"></label>
+            <label>Порог схожести при сравнении, % <input type="number" id="dtMinMatchScore" min="0" max="100"></label>
+          </div>
+          <button class="btn btn-danger" id="resetDigitTemplatesBtn">Сбросить эталоны</button>
+        </div>
+      </details>
+
+      <button class="btn btn-primary" id="saveCaptureBtn">Сохранить</button>
+
+    </section>
+
+    <section id="tab-scanner" class="tab">
+      <h1>Детектор сканера</h1>
+
+      <h2>Привязка к устройству</h2>
+      <p class="hint" id="scannerDeviceHint">Загрузка…</p>
+      <div class="row-inline" id="scannerDeviceRow">
+        <button class="btn btn-outline" id="scannerDetectBtn" type="button">Определить сканер по QR-коду</button>
+        <button class="btn btn-outline" id="scannerUnbindBtn" type="button" style="display:none">Сбросить привязку</button>
+      </div>
+      <div id="scannerDetectPanel" style="display:none">
+        <p class="hint">Отсканируйте этот QR-код тем сканером, который должен печатать этикетки. Содержимое кода не важно — программа смотрит только, с какого устройства пришло нажатие.</p>
+        <img id="scannerQrImg" alt="QR-код для калибровки" style="width:180px;height:180px;border-radius:8px;">
+        <p class="hint" id="scannerDetectStatus">Ожидание скана…</p>
+        <div id="scannerDetectResult" style="display:none">
+          <p class="hint" id="scannerDetectedName"></p>
+          <div class="row-inline">
+            <button class="btn btn-primary" id="scannerConfirmBtn" type="button">Подтвердить это устройство</button>
+            <button class="btn btn-outline" id="scannerRetryBtn" type="button">Сканировать ещё раз</button>
+          </div>
+        </div>
+        <button class="btn btn-outline" id="scannerCancelDetectBtn" type="button">Отмена</button>
+      </div>
+
+      <hr>
+      <h2>Эвристика по времени между символами</h2>
+      <p class="hint">Используется, пока сканер не привязан к устройству выше (или как резерв, если привязка почему-то не сработает).</p>
+      <div class="form-grid">
+        <label>Макс. интервал между символами, мс <input type="number" id="maxInterkey"></label>
+        <label>Мин. длина кода <input type="number" id="minCodeLength"></label>
+        <label>Задержка после скана перед снимком, мс <input type="number" id="postScanDelay"></label>
+        <label>Debounce дублей, мс <input type="number" id="debounceMs"></label>
+        <label>Число попыток распознавания <input type="number" id="retryCount"></label>
+        <label>Задержка между попытками, мс <input type="number" id="retryDelay"></label>
+      </div>
+      <div class="form-grid">
+        <label class="checkbox-row"><input type="checkbox" id="soundCapture"> Звук «идёт распознавание»</label>
+        <label class="checkbox-row"><input type="checkbox" id="soundSuccess"> Звук «успех»</label>
+        <label class="checkbox-row"><input type="checkbox" id="soundError"> Звук «ошибка»</label>
+      </div>
+      <button class="btn btn-primary" id="saveScannerBtn">Сохранить</button>
+
+      <hr>
+      <h3>Свои звуки</h3>
+      <p class="hint">По умолчанию используется обычный системный сигнал (динамик). Загрузите свой файл — только формат <b>WAV</b> (Windows не умеет проигрывать mp3 через этот механизм), чтобы заменить его на любой из этих трёх событий.</p>
+      <div id="soundUploadRows" class="sound-upload-rows"></div>
+    </section>
+
+    <section id="tab-template" class="tab">
+      <h1>Редактор макета этикетки</h1>
+      <div class="row-inline">
+        <label>Шаблон:
+          <select id="templateSelect"></select>
+        </label>
+        <button class="btn btn-secondary" id="newTemplateBtn">Новый шаблон</button>
+        <button class="btn btn-secondary" id="deleteTemplateBtn">Удалить</button>
+        <button class="btn btn-primary" id="activateTemplateBtn">Сделать активным</button>
+      </div>
+
+      <div class="row-inline" style="margin-top:10px">
+        <label>Тестовый номер ячейки для превью:
+          <input type="text" id="previewCellNumber" value="42" maxlength="8" style="width:90px">
+        </label>
+        <span class="hint">Меняйте, чтобы проверить автоцентровку и автоподбор размера шрифта на разном количестве цифр — превью ниже честно показывает то, что реально уйдёт на печать.</span>
+      </div>
+
+      <div class="editor-layout">
+        <div class="editor-canvas-wrap">
+          <div id="labelCanvas" class="label-canvas"></div>
+        </div>
+        <div class="editor-panel">
+          <div class="el-panel" id="panel-cell_number">
+            <h4>Номер ячейки</h4>
+            <p class="hint">Просто задайте размер рамки — номер сам отцентруется и подберёт максимальный размер шрифта под неё.</p>
+            <label>X, мм <input type="number" data-el="cell_number" data-field="x_mm"></label>
+            <label>Y, мм <input type="number" data-el="cell_number" data-field="y_mm"></label>
+            <label>Ширина рамки, мм <input type="number" data-el="cell_number" data-field="width_mm"></label>
+            <label>Высота рамки, мм <input type="number" data-el="cell_number" data-field="height_mm"></label>
+            <label class="checkbox-row"><input type="checkbox" data-el="cell_number" data-field="bold"> Жирный шрифт</label>
+          </div>
+          <div class="el-panel" id="panel-bar">
+            <h4>Полоса-ориентир</h4>
+            <label>X, мм <input type="number" data-el="bar" data-field="x_mm"></label>
+            <label>Y, мм <input type="number" data-el="bar" data-field="y_mm"></label>
+            <label>Ширина, мм <input type="number" data-el="bar" data-field="width_mm"></label>
+            <label>Высота, мм <input type="number" data-el="bar" data-field="height_mm"></label>
+          </div>
+          <div class="el-panel" id="panel-static_text">
+            <h4>Произвольный текст</h4>
+            <p class="hint">Тоже задаётся рамкой — текст автоматически центруется и вписывается по размеру. Можно вводить несколько строк (Enter).</p>
+            <label class="label-textarea">Текст <textarea data-el="static_text" data-field="content" rows="3" placeholder="Например:&#10;ПВЗ Иванова&#10;ул. Ленина 5"></textarea></label>
+            <label>X, мм <input type="number" data-el="static_text" data-field="x_mm"></label>
+            <label>Y, мм <input type="number" data-el="static_text" data-field="y_mm"></label>
+            <label>Ширина рамки, мм <input type="number" data-el="static_text" data-field="width_mm"></label>
+            <label>Высота рамки, мм <input type="number" data-el="static_text" data-field="height_mm"></label>
+            <label class="checkbox-row"><input type="checkbox" data-el="static_text" data-field="bold"> Жирный шрифт</label>
+          </div>
+          <div class="el-panel" id="panel-image">
+            <h4>Картинка</h4>
+            <input type="file" id="imageUpload" accept="image/*">
+            <label>X, мм <input type="number" data-el="image" data-field="x_mm"></label>
+            <label>Y, мм <input type="number" data-el="image" data-field="y_mm"></label>
+            <label>Ширина, мм <input type="number" data-el="image" data-field="width_mm"></label>
+            <label>Высота, мм <input type="number" data-el="image" data-field="height_mm"></label>
+
+            <details class="advanced-details" open>
+              <summary>Настройки конвертации в Ч/Б</summary>
+              <label>Метод конвертации
+                <select id="convMethod">
+                  <option value="dither">Дизеринг (фото/градиенты)</option>
+                  <option value="threshold">Жёсткий порог (логотипы)</option>
+                  <option value="otsu">Авто-порог (Отсу)</option>
+                  <option value="adaptive">Адаптивный порог (неровный свет)</option>
+                  <option value="ordered">Упорядоченный дизеринг (Байер)</option>
+                  <option value="halftone">Полутон / газетный растр</option>
+                  <option value="edge">Контур (только границы)</option>
+                </select>
+              </label>
+              <div class="form-grid">
+                <label>Порог, 0-255 (для "Жёсткий порог") <input type="number" id="convThreshold" min="0" max="255"></label>
+                <label>Порог контура (для "Контур") <input type="number" id="convEdgeThreshold" min="0" max="255"></label>
+                <label>Ячейка растра, px (для "Полутон") <input type="number" id="convHalftoneCell" min="2" max="40"></label>
+                <label>Окно, px (для "Адаптивный") <input type="number" id="convAdaptiveBlock" min="3" max="99"></label>
+                <label>Смещение порога (для "Адаптивный") <input type="number" id="convAdaptiveBias" min="-50" max="50"></label>
+              </div>
+              <p class="hint">Поля выше действуют только для соответствующего метода — остальные при этом методе игнорируются.</p>
+              <div class="form-grid">
+                <label>Контраст <input type="number" id="convContrast" step="0.1" min="0"></label>
+                <label>Яркость <input type="number" id="convBrightness" step="0.1" min="0"></label>
+                <label>Гамма <input type="number" id="convGamma" step="0.1" min="0.05"></label>
+                <label>Чёрная точка, 0-255 <input type="number" id="convBlackPoint" min="0" max="255"></label>
+                <label>Белая точка, 0-255 <input type="number" id="convWhitePoint" min="0" max="255"></label>
+              </div>
+              <label class="checkbox-row"><input type="checkbox" id="convSharpen"> Резкость перед конвертацией</label>
+              <label class="checkbox-row"><input type="checkbox" id="convInvert"> Инвертировать цвет (негатив)</label>
+            </details>
+          </div>
+          <button class="btn btn-primary" id="saveTemplateBtn">Сохранить шаблон</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-log" class="tab tab-log">
+      <h1>Журнал печати</h1>
+      <div class="log-toolbar">
+        <select id="logStatusFilter">
+          <option value="">Все статусы</option>
+          <option value="success">Успех</option>
+          <option value="error">Ошибка</option>
+          <option value="skipped">Пропущено (цвет)</option>
+        </select>
+        <input type="text" id="logSearch" placeholder="Поиск по номеру ячейки">
+        <button class="btn btn-secondary" id="refreshLogBtn">Обновить</button>
+        <a class="btn btn-secondary" id="exportLogBtn" href="/api/log/export.csv">Экспорт в CSV</a>
+        <button class="btn btn-danger" id="clearLogBtn">Очистить журнал</button>
+      </div>
+      <div class="log-table-wrap">
+        <table class="log-table">
+          <thead><tr><th>Время</th><th>Номер ячейки</th><th>Результат</th><th>Примечание</th></tr></thead>
+          <tbody id="logBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-general" class="tab">
+      <h1>Общие настройки</h1>
+      <label class="checkbox-row"><input type="checkbox" id="autostart"> Запускать вместе с Windows</label>
+
+      <h3>Горячие клавиши</h3>
+      <label class="checkbox-row"><input type="checkbox" id="hotkeysEnabled"> Включить глобальные горячие клавиши</label>
+      <div class="form-grid">
+        <label>Пауза / возобновить <input type="text" id="hotkeyPause" placeholder="ctrl+alt+p"></label>
+        <label>Повтор последней печати <input type="text" id="hotkeyRepeat" placeholder="ctrl+alt+r"></label>
+        <label>Открыть настройки <input type="text" id="hotkeyOpenSettings" placeholder="ctrl+alt+o"></label>
+      </div>
+      <p class="hint">Формат как в библиотеке keyboard: клавиши через «+», например ctrl+alt+p.</p>
+      <button class="btn btn-primary" id="saveGeneralBtn">Сохранить</button>
+
+      <hr>
+      <h2>Экспорт / импорт настроек</h2>
+      <div class="row-inline">
+        <a class="btn btn-secondary" id="exportBtn" href="/api/export" download>Экспортировать в файл</a>
+        <input type="file" id="importInput" accept="application/json">
+        <button class="btn btn-secondary" id="importBtn">Импортировать</button>
+      </div>
+      <p id="importResult" class="hint"></p>
+    </section>
+
+    <section id="tab-help" class="tab">
+      <h1>Инструкция по первому запуску</h1>
+      <ol class="help-list">
+        <li><b>Принтер.</b> На вкладке «Принтер» выберите XP-370B из списка, укажите размер этикетки (по умолчанию 40×30 мм) и нажмите «Тестовая печать», чтобы убедиться, что печать вообще работает.</li>
+        <li><b>Область номера.</b> На вкладке «Область распознавания» откройте окно «Мой ПВЗ», нажмите «Откалибровать», после снимка выделите прямоугольник вокруг того места, где появляется номер ячейки, нажмите «Сохранить область номера».</li>
+        <li><b>Точки цвета (необязательно).</b> Если печать должна происходить только при появлении определённого индикатора (например, зелёной подсветки) — переключитесь на режим «Пипетка цвета» на том же снимке и кликните по нужной точке. Можно добавить несколько точек и выбрать логику И/ИЛИ.</li>
+        <li><b>Проверка.</b> Нажмите «Проверить область» — убедитесь, что номер распознаётся верно и уверенность (%) достаточно высокая. Если нет — подберите параметры OCR (увеличение, порог, инверсия) там же.</li>
+        <li><b>Макет этикетки.</b> На вкладке «Редактор этикетки» перетащите и измените размер рамок номера, полосы, текста и картинки. Номер и текст сами центруются и подбирают размер шрифта под рамку.</li>
+        <li><b>Тестовый скан.</b> На вкладке «Статус» нажмите «Запустить тестовый скан» — это прогонит весь цикл без физического сканирования.</li>
+        <li><b>Готово.</b> Закройте окно настроек (оно свернётся в трей, программа продолжит работать). Сканируйте товар как обычно — этикетка распечатается автоматически.</li>
+      </ol>
+      <h2>Если номер распознаётся неправильно</h2>
+      <p>Откройте «Область распознавания» → «Проверить область» и посмотрите на обработанную (чёрно-белую) картинку и % уверенности. Попробуйте увеличить «Увеличение перед OCR», переключить порог бинаризации на «Ручной» и подобрать значение, либо принудительно включить/выключить инверсию — в зависимости от того, тёмный или светлый фон у номера в «Мой ПВЗ».</p>
+      <h2>Горячие клавиши по умолчанию</h2>
+      <p>Пауза: <code>Ctrl+Alt+P</code> · Повтор печати: <code>Ctrl+Alt+R</code> · Открыть настройки: <code>Ctrl+Alt+O</code> — можно изменить на вкладке «Общие / экспорт».</p>
+    </section>
+
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
